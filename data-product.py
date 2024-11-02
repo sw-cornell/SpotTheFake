@@ -20,6 +20,7 @@ import plotly.graph_objects as go
 nltk.download('stopwords')
 nltk.download('wordnet')
 nltk.download('punkt')
+nltk.download('punkt_tab')
 
 # Initialize lemmatizer and stopwords
 lemmatizer = WordNetLemmatizer()
@@ -110,7 +111,7 @@ def predict_fake_reviews(texts, model, vectorizer):
 
 def create_analysis_plots(df):
     """Create various analysis plots for the reviews data"""
-    
+
     # 1. Rating Distribution Plot
     fig_rating = px.histogram(
         df,
@@ -127,7 +128,7 @@ def create_analysis_plots(df):
     # 2. Review Timeline
     df['month_year'] = df['time'].dt.strftime('%Y-%m')
     timeline_data = df.groupby(['month_year', 'prediction']).size().unstack(fill_value=0)
-    
+
     fig_timeline = go.Figure()
     fig_timeline.add_trace(go.Scatter(
         x=timeline_data.index,
@@ -174,19 +175,19 @@ def create_analysis_plots(df):
 
     # 5. Summary Metrics in Columns
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         avg_real_rating = df[df['prediction'] == 1]['rating'].mean()
         st.metric("Avg Real Review Rating", f"{avg_real_rating:.1f}⭐")
-    
+
     with col2:
         avg_fake_rating = df[df['prediction'] == 0]['rating'].mean()
         st.metric("Avg Fake Review Rating", f"{avg_fake_rating:.1f}⭐")
-    
+
     with col3:
         avg_real_length = df[df['prediction'] == 1]['review_length'].mean()
         st.metric("Avg Real Review Length", f"{avg_real_length:.0f}")
-    
+
     with col4:
         avg_fake_length = df[df['prediction'] == 0]['review_length'].mean()
         st.metric("Avg Fake Review Length", f"{avg_fake_length:.0f}")
@@ -293,7 +294,7 @@ def main():
     # API Key input section
     with st.sidebar:
         st.header("API Configuration")
-        
+
         # Create a text input for the API key
         api_key = st.text_input(
             "Enter Google Places API Key:",
@@ -310,7 +311,7 @@ def main():
             st.stop()
 
         st.markdown("---")
-        
+
         st.header("About")
         st.markdown("""
         This app uses:
