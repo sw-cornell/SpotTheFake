@@ -145,22 +145,22 @@ def create_analysis_plots(df):
     df['month_year'] = pd.to_datetime(df['time']).dt.strftime('%Y-%m')
     timeline_data = df.groupby(['month_year', 'prediction']).size().reset_index(name='count')
     timeline_data = timeline_data.pivot(index='month_year', columns='prediction', values='count').fillna(0)
-    
+
     # Sort the index to ensure chronological order
     timeline_data = timeline_data.sort_index()
-    
+
     # Filter out future dates
     current_date = datetime.now()
     timeline_data = timeline_data[timeline_data.index <= current_date.strftime('%Y-%m')]
-    
+
     fig_timeline = go.Figure()
-    
+
     # Add traces based on available prediction types
     if all_real_or_fake:
         prediction_value = df['prediction'].iloc[0]
         color = '#00CC96' if prediction_value == 1 else '#EF553B'
         name = 'Real Reviews' if prediction_value == 1 else 'Fake Reviews'
-        
+
         fig_timeline.add_trace(go.Scatter(
             x=timeline_data.index,
             y=timeline_data[prediction_value],
@@ -182,7 +182,7 @@ def create_analysis_plots(df):
                 name='Fake Reviews',
                 line=dict(color='#EF553B')
             ))
-    
+
     fig_timeline.update_layout(
         title='Review Timeline: Real vs Fake Reviews' if not all_real_or_fake else f'Review Timeline: {single_type_label}',
         xaxis_title='Date',
@@ -193,10 +193,10 @@ def create_analysis_plots(df):
     # 3. Confidence Distribution Plot
     fig_conf = px.histogram(
         df,
-        x='fake_probability',
+        x='real_probability',
         nbins=20,
         title='Model Confidence Distribution',
-        labels={'fake_probability': 'Probability of Being Real'},
+        labels={'real_probability': 'Probability of Being Real'},
         color_discrete_sequence=['#636EFA']
     )
     st.plotly_chart(fig_conf, use_container_width=True)
@@ -439,7 +439,7 @@ def main():
                 predictions, probabilities = predict_fake_reviews(df['text'].tolist(), model, vectorizer)
 
                 df['prediction'] = predictions
-                df['fake_probability'] = probabilities[:, 1]
+                df['real_probability'] = probabilities[:, 1]
 
                 # Display initial metrics
                 col1, col2, col3 = st.columns(3)
@@ -457,7 +457,7 @@ def main():
 
                 # Display individual reviews
                 st.subheader("📝 Individual Review Analysis")
-                df_sorted = df.sort_values('fake_probability', ascending=False)
+                df_sorted = df.sort_values('real_probability', ascending=False)
 
                 filename = f"{place_details['name']}_reviews_{datetime.now().strftime('%Y%m%d')}.csv"
                 reviewer.save_to_csv(df_sorted, filename)
@@ -467,8 +467,8 @@ def main():
                         st.write(f"**Rating:** {'⭐' * int(review['rating'])}")
                         st.write(f"**Review:** {review['text']}")
                         st.write(f"**Date:** {review['time'].strftime('%Y-%m-%d')}")
-                        st.progress(review['fake_probability'])
-                        st.write(f"Probability of being real: {review['fake_probability']:.2%}")
+                        st.progress(review['real_probability'])
+                        st.write(f"Probability of being real: {review['real_probability']:.2%}")
 
                 with open(filename, 'rb') as f:
                     st.download_button(
