@@ -112,44 +112,85 @@ def predict_fake_reviews(texts, model, vectorizer):
 def create_analysis_plots(df):
     """Create various analysis plots for the reviews data"""
 
+    # Check for all-real or all-fake cases and adjust accordingly
+    unique_predictions = df['prediction'].nunique()
+    all_real_or_fake = unique_predictions == 1
+    single_type_label = "All reviews classified as Real" if df['prediction'].iloc[0] == 1 else "All reviews classified as Fake"
+
+    if all_real_or_fake:
+        st.warning(f"{single_type_label}. Some plots are adjusted accordingly.")
+
     # 1. Rating Distribution Plot
-    fig_rating = px.histogram(
-        df,
-        x='rating',
-        color='prediction',
-        barmode='group',
-        title='Rating Distribution: Real vs Fake Reviews',
-        labels={'prediction': 'Review Type', 'rating': 'Rating'},
-        color_discrete_map={1: '#00CC96', 0: '#EF553B'}
-    )
-    fig_rating.update_layout(showlegend=True)
+    if all_real_or_fake:
+        fig_rating = px.histogram(
+            df,
+            x='rating',
+            title=f'Rating Distribution: {single_type_label}',
+            labels={'rating': 'Rating'},
+            color_discrete_sequence=['#00CC96'] if df['prediction'].iloc[0] == 1 else ['#EF553B']
+        )
+    else:
+        fig_rating = px.histogram(
+            df,
+            x='rating',
+            color='prediction',
+            barmode='group',
+            title='Rating Distribution: Real vs Fake Reviews',
+            labels={'prediction': 'Review Type', 'rating': 'Rating'},
+            color_discrete_map={1: '#00CC96', 0: '#EF553B'}
+        )
     st.plotly_chart(fig_rating, use_container_width=True)
 
-    # 2. Review Timeline
-    df['month_year'] = df['time'].dt.strftime('%Y-%m')
-    timeline_data = df.groupby(['month_year', 'prediction']).size().unstack(fill_value=0)
-
+    # 2. Review Timeline Plot
+    df['month_year'] = pd.to_datetime(df['time']).dt.strftime('%Y-%m')
+    timeline_data = df.groupby(['month_year', 'prediction']).size().reset_index(name='count')
+    timeline_data = timeline_data.pivot(index='month_year', columns='prediction', values='count').fillna(0)
+    
+    # Sort the index to ensure chronological order
+    timeline_data = timeline_data.sort_index()
+    
+    # Filter out future dates
+    current_date = datetime.now()
+    timeline_data = timeline_data[timeline_data.index <= current_date.strftime('%Y-%m')]
+    
     fig_timeline = go.Figure()
-    fig_timeline.add_trace(go.Scatter(
-        x=timeline_data.index,
-        y=timeline_data[1],
-        name='Real Reviews',
-        line=dict(color='#00CC96')
-    ))
-    fig_timeline.add_trace(go.Scatter(
-        x=timeline_data.index,
-        y=timeline_data[0],
-        name='Fake Reviews',
-        line=dict(color='#EF553B')
-    ))
+    
+    # Add traces based on available prediction types
+    if all_real_or_fake:
+        prediction_value = df['prediction'].iloc[0]
+        color = '#00CC96' if prediction_value == 1 else '#EF553B'
+        name = 'Real Reviews' if prediction_value == 1 else 'Fake Reviews'
+        
+        fig_timeline.add_trace(go.Scatter(
+            x=timeline_data.index,
+            y=timeline_data[prediction_value],
+            name=name,
+            line=dict(color=color)
+        ))
+    else:
+        if 1 in timeline_data.columns:
+            fig_timeline.add_trace(go.Scatter(
+                x=timeline_data.index,
+                y=timeline_data[1],
+                name='Real Reviews',
+                line=dict(color='#00CC96')
+            ))
+        if 0 in timeline_data.columns:
+            fig_timeline.add_trace(go.Scatter(
+                x=timeline_data.index,
+                y=timeline_data[0],
+                name='Fake Reviews',
+                line=dict(color='#EF553B')
+            ))
+    
     fig_timeline.update_layout(
-        title='Review Timeline: Real vs Fake Reviews',
+        title='Review Timeline: Real vs Fake Reviews' if not all_real_or_fake else f'Review Timeline: {single_type_label}',
         xaxis_title='Date',
         yaxis_title='Number of Reviews'
     )
     st.plotly_chart(fig_timeline, use_container_width=True)
 
-    # 3. Confidence Distribution
+    # 3. Confidence Distribution Plot
     fig_conf = px.histogram(
         df,
         x='fake_probability',
@@ -162,35 +203,45 @@ def create_analysis_plots(df):
 
     # 4. Review Length Analysis
     df['review_length'] = df['text'].str.len()
-    fig_length = px.box(
-        df,
-        x='prediction',
-        y='review_length',
-        color='prediction',
-        title='Review Length Distribution by Type',
-        labels={'prediction': 'Review Type', 'review_length': 'Review Length (characters)'},
-        color_discrete_map={1: '#00CC96', 0: '#EF553B'}
-    )
+    if all_real_or_fake:
+        fig_length = px.box(
+            df,
+            y='review_length',
+            title=f'Review Length Distribution for {single_type_label}',
+            labels={'review_length': 'Review Length (characters)'},
+            color_discrete_sequence=['#00CC96'] if df['prediction'].iloc[0] == 1 else ['#EF553B']
+        )
+    else:
+        fig_length = px.box(
+            df,
+            x='prediction',
+            y='review_length',
+            color='prediction',
+            title='Review Length Distribution by Type',
+            labels={'prediction': 'Review Type', 'review_length': 'Review Length (characters)'},
+            color_discrete_map={1: '#00CC96', 0: '#EF553B'}
+        )
     st.plotly_chart(fig_length, use_container_width=True)
 
     # 5. Summary Metrics in Columns
     col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
+    if not all_real_or_fake or (all_real_or_fake and df['prediction'].iloc[0] == 1):
         avg_real_rating = df[df['prediction'] == 1]['rating'].mean()
-        st.metric("Avg Real Review Rating", f"{avg_real_rating:.1f}⭐")
-
-    with col2:
-        avg_fake_rating = df[df['prediction'] == 0]['rating'].mean()
-        st.metric("Avg Fake Review Rating", f"{avg_fake_rating:.1f}⭐")
-
-    with col3:
+        col1.metric("Avg Real Review Rating", f"{avg_real_rating:.1f}⭐")
         avg_real_length = df[df['prediction'] == 1]['review_length'].mean()
-        st.metric("Avg Real Review Length", f"{avg_real_length:.0f}")
+        col3.metric("Avg Real Review Length", f"{avg_real_length:.0f}")
+    else:
+        col1.metric("Avg Real Review Rating", "N/A")
+        col3.metric("Avg Real Review Length", "N/A")
 
-    with col4:
+    if not all_real_or_fake or (all_real_or_fake and df['prediction'].iloc[0] == 0):
+        avg_fake_rating = df[df['prediction'] == 0]['rating'].mean()
+        col2.metric("Avg Fake Review Rating", f"{avg_fake_rating:.1f}⭐")
         avg_fake_length = df[df['prediction'] == 0]['review_length'].mean()
-        st.metric("Avg Fake Review Length", f"{avg_fake_length:.0f}")
+        col4.metric("Avg Fake Review Length", f"{avg_fake_length:.0f}")
+    else:
+        col2.metric("Avg Fake Review Rating", "N/A")
+        col4.metric("Avg Fake Review Length", "N/A")
 
 
 class GooglePlacesReviewer:
